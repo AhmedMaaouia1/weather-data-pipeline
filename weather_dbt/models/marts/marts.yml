@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: fact_weather
+    description: "Table de faits météo avec les mesures par observation."
+    columns:
+      - name: city_id
+        description: "Identifiant de la ville."
+        tests:
+          - not_null
+      - name: observation_time
+        description: "Moment de l’observation."
+        tests:
+          - not_null
+      - name: temperature
+        description: "Température en degrés Celsius."
+        tests:
+          - not_null
+
+  - name: dim_city
+    description: "Dimension des villes avec leurs infos (pays, région, lat/lon)."
+    columns:
+      - name: city_id
+        description: "Clé primaire de la dimension ville."
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: "Nom de la ville."
+        tests:
+          - not_null
+
+  - name: weather_metrics
+    description: "Métriques météo enrichies (quotidiennes et mensuelles)."
+    columns:
+      - name: city_id
+        description: "Ville."
+        tests:
+          - not_null
+      - name: day
+        description: "Jour de l’observation."
+        tests:
+          - not_null
+      - name: avg_temperature
+        description: "Température moyenne quotidienne."
+      - name: monthly_avg_temp
+        description: "Température moyenne mensuelle."
+      - name: temp_anomaly
+        description: "Écart entre la température quotidienne et la moyenne mensuelle."
+      - name: humidex
+        description: "Indice de confort thermique."
+        tests:
+          - not_null

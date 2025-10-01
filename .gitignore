@@ -1,0 +1,35 @@
+.git
+.env
+.DS_Store
+airflow_settings.yaml
+__pycache__/
+astro
+.venv
+airflow-webserver.pid
+webserver_config.py
+airflow.cfg
+airflow.db
+
+# Astronomer / Airflow
+.astro/
+logs/
+plugins/__pycache__/
+
+# DBT
+target/
+dbt_modules/
+dbt_packages/
+
+# Python cache
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log
+warehouse_data/

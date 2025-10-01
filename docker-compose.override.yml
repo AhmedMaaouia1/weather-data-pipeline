@@ -1,0 +1,41 @@
+services:
+  warehouse:
+    image: postgres:14
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: warehouse
+      POSTGRES_PASSWORD: warehouse
+      POSTGRES_DB: weather
+    ports:
+      - "5433:5432"
+    volumes:
+      - warehouse_data:/var/lib/postgresql/data
+    networks:
+      - default
+
+
+  scheduler:
+    env_file:
+      - .env
+    volumes:
+      - .:/usr/app
+      - ./weather_dbt:/usr/local/airflow/weather_dbt
+    networks:
+      - default
+
+  webserver:
+    env_file:
+      - .env
+    volumes:
+      - ./weather_dbt:/usr/local/airflow/weather_dbt
+    networks:
+      - default
+
+      
+volumes:
+  warehouse_data:
+
+networks:
+  default:
+    external: false
