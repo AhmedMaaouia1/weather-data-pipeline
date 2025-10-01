@@ -1,45 +1,178 @@
-Overview
-========
+# 🌦️ End-to-End Weather Data Pipeline (Airflow + Postgres + dbt + Docker)
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+Pipeline **ETL/ELT** conteneurisé qui :
+- **extrait** des observations météo depuis l’API *Weatherstack* (Python),
+- **charge** les données brutes dans un **PostgreSQL** `warehouse`,
+- **transforme** les données avec **dbt** (staging → dimension/fact → métriques),
+- est **orchestré** par **Apache Airflow** via **Astro CLI**,
+- s’exécute en **Docker** grâce à `docker-compose.override.yml`.
 
-Project Contents
-================
+![Architecture](docs/architecture.png)
 
-Your Astro project contains the following files and folders:
+---
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+## 🧱 Stack
+- **Docker / docker-compose** – conteneurisation & réseau local
+- **Astro CLI** – Airflow prêt à l’emploi en local
+- **Airflow** – orchestration des DAGs
+- **PostgreSQL (warehouse)** – stockage des données
+- **dbt (core + postgres adapter)** – transformations SQL
 
-Deploy Your Project Locally
-===========================
+---
 
-Start Airflow on your local machine by running 'astro dev start'.
+## 📁 Structure du repo
+```
+.
+├─ dags/
+│  ├─ extract_weather.py          # DAG d'extract & load (API → warehouse)
+│  ├─ dbt_run.py                  # DAG pour dbt run + test
+│  └─ analytics_weather.py        # (optionnel) DAG pour les métriques dbt
+├─ weather_dbt/                   # Projet dbt
+│  ├─ models/
+│  │  ├─ staging/...
+│  │  └─ marts/...
+│  ├─ dbt_project.yml
+│  └─ packages.yml
+├─ docker-compose.override.yml    # ajoute le service Postgres warehouse
+├─ requirements.txt               # libs Airflow image (dbt, psycopg2…)
+├─ Dockerfile                     # image Astro Runtime personnalisée
+├─ .env.example                   # variables d'env à copier/adapter
+├─ .gitignore
+└─ README.md
+```
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+---
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+## 🔐 Variables d’environnement
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+Crée un fichier **`.env`** à la racine à partir de **`.env.example`** :
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+```bash
+cp .env.example .env
+# puis édite .env (clé API, etc.)
+```
 
-Deploy Your Project to Astronomer
-=================================
+Variables utilisées (extrait) :
+```dotenv
+# Airflow internal Postgres (fourni par Astro)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=airflow
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+# Warehouse Postgres (notre entrepôt)
+WAREHOUSE_USER=warehouse
+WAREHOUSE_PASSWORD=warehouse
+WAREHOUSE_DB=weather
+WAREHOUSE_PORT=5433
+WAREHOUSE_HOST=warehouse
 
-Contact
-=======
+# API
+WEATHERSTACK_API_KEY=CHANGE_ME
+```
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+> ℹ️ **Astro** charge automatiquement `.env` si tu l’indiques avec `--env .env`.
+
+---
+
+## 🐳 Docker & Compose
+
+Le fichier **`docker-compose.override.yml`** (fourni) **ajoute** un conteneur **Postgres 14** pour le *warehouse* et monte le projet dbt dans les conteneurs Airflow.
+
+> Extrait clé :
+```yaml
+services:
+  warehouse:
+    image: postgres:14
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${WAREHOUSE_USER}
+      POSTGRES_PASSWORD: ${WAREHOUSE_PASSWORD}
+      POSTGRES_DB: ${WAREHOUSE_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - warehouse_data:/var/lib/postgresql/data
+```
+
+**Pourquoi 5433 ?** Pour éviter le conflit avec le Postgres interne d’Airflow (5432).
+
+---
+
+## ▶️ Lancer le projet (Astro + Docker)
+
+1) **Installer** prérequis  
+- Docker Desktop
+- Astro CLI
+
+2) **Construire et démarrer** (en chargeant `.env`) :
+```bash
+astro dev start --no-cache --wait 180s --env .env
+```
+
+3) **URLs**  
+- Airflow UI → http://localhost:8080 (admin / admin par défaut)
+- Postgres warehouse → `localhost:5433`
+
+4) **Arrêter**  
+```bash
+astro dev stop
+```
+
+---
+
+## 🚀 Exécuter les DAGs
+
+Dans l’UI Airflow :
+- **extract_weather** → récupère la météo (Paris) et insère en `raw_weather`.
+- **dbt_run** → `dbt run` puis `dbt test` sur le projet `weather_dbt`.
+- **analytics_weather** *(optionnel)* → calcule et teste `weather_metrics`.
+
+---
+
+## 🧠 dbt – structure & commandes utiles
+
+Modèles clés :
+- `models/staging/stg_weather.sql` – projection/renommage + tests de qualité
+- `models/marts/dim_city.sql` – dimension
+- `models/marts/fact_weather.sql` – faits par observation
+- `models/marts/weather_metrics.sql` – moyennes/jours, anomalies mensuelles, **humidex**
+
+Exécuter dbt **dans le scheduler** :
+```bash
+docker exec -it $(docker ps -qf "name=scheduler") bash
+dbt debug --project-dir /usr/app/weather_dbt --profiles-dir /usr/app
+dbt run   --project-dir /usr/app/weather_dbt --profiles-dir /usr/app
+dbt test  --project-dir /usr/app/weather_dbt --profiles-dir /usr/app
+```
+
+> Dans les DAGs, on passe aussi `--no-write-json --log-format text --log-path /tmp --target-path /tmp/target` pour éviter des problèmes de permissions en écriture.
+
+---
+
+## 🧪 Validation rapide
+
+- `select * from analytics.stg_weather limit 5;`
+- `select * from analytics.dim_city limit 5;`
+- `select * from analytics.fact_weather limit 5;`
+- `select * from analytics.analytics.weather_metrics limit 5;` *(si DAG analytics activé)*
+
+---
+
+## 🛠️ Dépannage (FAQ)
+
+- **Le conteneur `warehouse` boucle au démarrage / demande un mot de passe**  
+  ➜ Assure-toi que **`.env`** est chargé par Astro: `astro dev start --env .env`  
+  ➜ Vérifie que le volume `warehouse_data` a bien été recréé si tu as changé les secrets.
+
+- **dbt ne se connecte pas**  
+  ➜ Dans `profiles.yml` (côté conteneurs Airflow), utilise `host: warehouse` et `port: 5432`.  
+  ➜ Depuis l’hôte (tests rapides), utilise `host.docker.internal:5433`.
+
+- **Erreurs de permissions dbt**  
+  ➜ Utilise `--no-write-json`, `--log-path /tmp`, `--target-path /tmp/target` (déjà dans les DAGs).
+
+---
+
+## 📜 Licence
+Ce dépôt est fourni à titre éducatif et peut être réutilisé/étendu librement dans le cadre de projets d’apprentissage.
