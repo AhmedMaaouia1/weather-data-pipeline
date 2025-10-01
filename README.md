@@ -7,7 +7,7 @@ Pipeline **ETL/ELT** conteneurisé qui :
 - est **orchestré** par **Apache Airflow** via **Astro CLI**,
 - s’exécute en **Docker** grâce à `docker-compose.override.yml`.
 
-![Architecture](docs/architecture.png)
+![Architecture](weather_data_pipeline.jpeg)
 
 ---
 
